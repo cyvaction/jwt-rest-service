@@ -20,7 +20,7 @@ public class Admin extends AbstractEntity {
 	
 	private LocalDateTime timestamp;
 	
-	@Column(unique=true)
+	@Column(unique=true, length=511)
 	private String token;
 	
 	protected Admin(){

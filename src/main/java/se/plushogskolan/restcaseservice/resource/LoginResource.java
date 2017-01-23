@@ -2,7 +2,6 @@ package se.plushogskolan.restcaseservice.resource;
 
 import javax.ws.rs.Consumes;
 import javax.ws.rs.POST;
-import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
@@ -37,7 +36,8 @@ public final class LoginResource {
 	}
 	
 	//just to create an admin
-	@PUT
+	@Path("/new")
+	@POST
 	public Response createAdmin(LoginBean credentials){
 		
 		if(credentials.getPassword() == null || credentials.getUsername() == null)

@@ -3,7 +3,6 @@ package se.plushogskolan.restcaseservice.model;
 public final class AccessBean {
 
 	private String access_token;
-	
 	private String expiration_time;
 	
 	public AccessBean(String access_token, String expiration_time){
