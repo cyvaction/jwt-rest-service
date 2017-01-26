@@ -10,7 +10,7 @@ public final class LoginBean {
 		this.username = username;
 		this.password = password;
 	}
-	
+
 	private LoginBean(){
 		this.username = null;
 		this.password = null;
@@ -23,5 +23,4 @@ public final class LoginBean {
 	public String getPassword() {
 		return password;
 	}
-
 }

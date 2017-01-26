@@ -4,8 +4,11 @@ import javax.ws.rs.Consumes;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
+import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import javax.ws.rs.core.Response.Status;
+import javax.ws.rs.core.UriInfo;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -24,6 +27,9 @@ public final class LoginResource {
 	@Autowired
 	private AdminService adminService;
 	
+	@Context
+	private UriInfo uriInfo;
+	
 	@POST
 	public Response login(LoginBean credentials){
 		
@@ -31,11 +37,13 @@ public final class LoginResource {
 			throw new UnauthorizedException("Missing username or password");
 		
 		AccessBean accessBean = adminService.login(credentials.getUsername(), credentials.getPassword());
-		
-		return Response.ok(accessBean).build();
+		if(accessBean.getRefreshToken() == null)
+			return Response.ok(accessBean).header("access_token", accessBean.getAccessToken()).build();
+		else
+			return Response.ok(accessBean).header("access_token", accessBean.getAccessToken())
+					.header("refresh_token", accessBean.getRefreshToken()).build();
 	}
 	
-	//just to create an admin
 	@Path("/new")
 	@POST
 	public Response createAdmin(LoginBean credentials){
@@ -45,6 +53,12 @@ public final class LoginResource {
 		
 		adminService.save(credentials.getUsername(), credentials.getPassword());
 		
+		return Response.status(Status.CREATED).build();
+	}
+	
+	@Path("/auth")
+	@POST
+	public Response requestAccessToken() {
 		return Response.ok().build();
 	}
 

@@ -16,6 +16,9 @@ public class Admin extends AbstractEntity {
 	
 	private byte[] hashedPassword;
 	
+	@Column(unique=true)
+	private String refreshToken;
+	
 	protected Admin(){
 	}
 	
@@ -35,5 +38,13 @@ public class Admin extends AbstractEntity {
 	
 	public byte[] getHashedPassword() {
 		return hashedPassword;
+	}
+	
+	public String getRefreshToken() {
+		return refreshToken;
+	}
+	
+	public void setRefreshToken(String refreshToken) {
+		this.refreshToken = refreshToken;
 	}
 }

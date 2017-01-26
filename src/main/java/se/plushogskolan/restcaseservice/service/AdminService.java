@@ -5,7 +5,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.security.spec.InvalidKeySpecException;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Date;
@@ -18,6 +18,7 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
@@ -33,8 +34,10 @@ import se.plushogskolan.restcaseservice.repository.AdminRepository;
 @Service
 public class AdminService {
 
-	private Key key = MacProvider.generateKey();
-	private final long EXPIRATION_TIME = 30;
+	private Key accessKey = MacProvider.generateKey();
+	private Key refreshKey = MacProvider.generateKey();
+	private final long ACCESS_EXPIRATION_TIME = 20;
+	private final long REFRESH_EXPIRATION_TIME = 60;
 	private final int ITERATIONS = 10000;
 	private AdminRepository adminRepository;
 
@@ -54,6 +57,7 @@ public class AdminService {
 
 	public AccessBean login(String username, String password) {
 		Admin admin;
+		Date accessTimestamp, refreshTimestamp;
 		try {
 			admin = adminRepository.findByUsername(username);
 		} catch (DataAccessException e) {
@@ -61,36 +65,56 @@ public class AdminService {
 		}
 		if (admin != null) {
 			if (authenticateLogin(admin, password)) {
-				//TODO fix
-				return new AccessBean(generateToken("cookie"), generateTimestamp().toString());
+				accessTimestamp = generateAccessTimestamp();
+				refreshTimestamp = generateRefreshTimestamp();
+				admin.setRefreshToken(generateRefreshToken(admin.getUsername(), refreshTimestamp));
+				admin = adminRepository.save(admin);
+				return new AccessBean(generateAccessToken(admin.getUsername(), accessTimestamp), admin.getRefreshToken())
+						.setExpirationTime(accessTimestamp);
 			} else
 				throw new UnauthorizedException("Invalid login");
 		} else
 			throw new NotFoundException("User does not exist");
 	}
 
-	public boolean verifyToken(String token) {
+	public AccessBean verifyAccessToken(String token) {
 		if (token != null) {
 			token = new String(token.substring("Bearer ".length()));
-			LocalDateTime timestamp;
-			
+			String username;
+			Date accessTimestamp;
 			try {
-				Jws<Claims> claims = Jwts.parser().require("admin", true).setSigningKey(key).parseClaimsJws(token);
-				Date date = claims.getBody().getExpiration();
-				timestamp = convert(date);
+				Jws<Claims> claims = Jwts.parser().require("admin", true).setSigningKey(accessKey).parseClaimsJws(token);
+				username = claims.getBody().getSubject();
 			} catch (SignatureException e) {
 				throw new UnauthorizedException("JWT could not be verified");
-			} catch (DataAccessException e) {
-				throw new WebInternalErrorException("Internal error");
+			} catch (ExpiredJwtException e) {
+				throw new UnauthorizedException("JWT has run out");
 			}
-
-			if (timestamp.isBefore(LocalDateTime.now())) {
-				throw new UnauthorizedException("Token has run out");
-			} else {
-				return true;
-			}
+			accessTimestamp = generateAccessTimestamp();
+			return new AccessBean(generateAccessToken(username, accessTimestamp))
+					.setExpirationTime(accessTimestamp);
+			
 		} else
-			throw new UnauthorizedException("No authorization header found");
+			throw new UnauthorizedException("Authorization header not found or empty");
+	}
+	
+	public AccessBean getNewAccessToken(String refreshToken) {
+		if(refreshToken != null) {
+			refreshToken = new String(refreshToken.substring("Bearer ".length()));
+			String username;
+			try {
+				Jws<Claims> claims = Jwts.parser().require("admin", true).setSigningKey(refreshKey).parseClaimsJws(refreshToken);
+				username = claims.getBody().getSubject();
+			} catch(SignatureException e) {
+				throw new UnauthorizedException("Refresh JWT could not be verified, log in again");
+			} catch(ExpiredJwtException e) {
+				throw new UnauthorizedException("Refresh JWT has run out, try logging in again");
+			}
+			
+			return new AccessBean(generateAccessToken(username, generateAccessTimestamp()), refreshToken);
+		}
+		else
+			throw new UnauthorizedException("Authorization header not found or empty");
 	}
 
 	private Admin createAdmin(String username, String password) {
@@ -125,24 +149,27 @@ public class AdminService {
 		return Arrays.equals(generateHash(password, admin.getSalt()), admin.getHashedPassword());
 	}
 
-	private String generateToken(String username) {
+	private String generateAccessToken(String username, Date timestamp) {
 		String compactJws = Jwts.builder().setHeaderParam("alg", "HS256").setHeaderParam("typ", "JWT")
-				.setSubject(username).claim("exp", convert(generateTimestamp())).claim("admin", true)
-				.signWith(SignatureAlgorithm.HS256, key).compact();
+				.setSubject(username).setExpiration(timestamp).claim("admin", true)
+				.signWith(SignatureAlgorithm.HS256, accessKey).compact();
+		return compactJws;
+	}
+	
+	private String generateRefreshToken(String username, Date timestamp) {
+		String compactJws = Jwts.builder().setHeaderParam("alg", "HS256").setHeaderParam("typ", "JWT")
+				.setSubject(username).setExpiration(timestamp).claim("admin", true)
+				.signWith(SignatureAlgorithm.HS256, refreshKey).compact();
 		return compactJws;
 	}
 
-	private LocalDateTime generateTimestamp() {
-		return LocalDateTime.now().plusSeconds(EXPIRATION_TIME);
-	}
-
-	private Date convert(LocalDateTime time) {
-		Date date = new Date();
-		LocalDateTime ldt = LocalDateTime.ofInstant(date.toInstant(), ZoneId.systemDefault());
-		return Date.from(ldt.atZone(ZoneId.systemDefault()).toInstant());
+	private Date generateAccessTimestamp() {
+		return Date.from(LocalDateTime.now().plusSeconds(ACCESS_EXPIRATION_TIME)
+				.minusHours(1).toInstant(ZoneOffset.UTC));
 	}
 	
-	private LocalDateTime convert(Date input) {
-		return input.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
+	private Date generateRefreshTimestamp() {
+		return Date.from(LocalDateTime.now().plusSeconds(REFRESH_EXPIRATION_TIME)
+				.minusHours(1).toInstant(ZoneOffset.UTC));
 	}
 }
