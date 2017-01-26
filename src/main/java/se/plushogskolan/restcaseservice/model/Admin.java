@@ -1,7 +1,5 @@
 package se.plushogskolan.restcaseservice.model;
 
-import java.time.LocalDateTime;
-
 import javax.persistence.Column;
 import javax.persistence.Entity;
 
@@ -17,11 +15,6 @@ public class Admin extends AbstractEntity {
 	private byte[] salt;
 	
 	private byte[] hashedPassword;
-	
-	private LocalDateTime timestamp;
-	
-	@Column(unique=true, length=511)
-	private String token;
 	
 	protected Admin(){
 	}
@@ -42,22 +35,5 @@ public class Admin extends AbstractEntity {
 	
 	public byte[] getHashedPassword() {
 		return hashedPassword;
-	}
-	
-	public LocalDateTime getTimestamp() {
-		
-		return LocalDateTime.from(timestamp);
-	}
-	
-	public String getToken() {
-		return token;
-	}
-	
-	public void setTimestamp(LocalDateTime timestamp) {
-		this.timestamp = timestamp;
-	}
-	
-	public void setToken(String token) {
-		this.token = token;
 	}
 }

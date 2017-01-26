@@ -17,6 +17,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.SignatureException;
@@ -59,12 +61,8 @@ public class AdminService {
 		}
 		if (admin != null) {
 			if (authenticateLogin(admin, password)) {
-				admin.setTimestamp(generateTimestamp());
-				
-				String token = generateToken(admin);
-				admin.setToken(token);
-				admin = adminRepository.save(admin);
-				return new AccessBean(admin.getToken(), admin.getTimestamp().toString());
+				//TODO fix
+				return new AccessBean(generateToken("cookie"), generateTimestamp().toString());
 			} else
 				throw new UnauthorizedException("Invalid login");
 		} else
@@ -74,28 +72,21 @@ public class AdminService {
 	public boolean verifyToken(String token) {
 		if (token != null) {
 			token = new String(token.substring("Bearer ".length()));
-			Admin admin;
+			LocalDateTime timestamp;
+			
 			try {
-				admin = adminRepository.findByToken(token);
+				Jws<Claims> claims = Jwts.parser().require("admin", true).setSigningKey(key).parseClaimsJws(token);
+				Date date = claims.getBody().getExpiration();
+				timestamp = convert(date);
+			} catch (SignatureException e) {
+				throw new UnauthorizedException("JWT could not be verified");
 			} catch (DataAccessException e) {
 				throw new WebInternalErrorException("Internal error");
 			}
 
-			if (admin == null)
-				throw new UnauthorizedException("Token not found");
-			else if (admin.getTimestamp().isBefore(LocalDateTime.now())) {
+			if (timestamp.isBefore(LocalDateTime.now())) {
 				throw new UnauthorizedException("Token has run out");
 			} else {
-				try {
-					Jwts.parser()
-					.require("admin", true)
-					.setSigningKey(key)
-					.parseClaimsJws(token);
-					// OK, we can trust this JWT
-				} catch (SignatureException e) {
-					// don't trust the JWT!
-					throw new UnauthorizedException("JWT could not be verified");
-				}
 				return true;
 			}
 		} else
@@ -134,25 +125,24 @@ public class AdminService {
 		return Arrays.equals(generateHash(password, admin.getSalt()), admin.getHashedPassword());
 	}
 
-	private String generateToken(Admin admin) {
-		String compactJws = Jwts.builder()
-				.setHeaderParam("alg", "HS256")
-				.setHeaderParam("typ", "JWT")
-				.claim("user", admin.getUsername())
-				.claim("exp", convert(admin.getTimestamp()))
-				.claim("admin", true)
-				.signWith(SignatureAlgorithm.HS256, key)
-				.compact();
+	private String generateToken(String username) {
+		String compactJws = Jwts.builder().setHeaderParam("alg", "HS256").setHeaderParam("typ", "JWT")
+				.setSubject(username).claim("exp", convert(generateTimestamp())).claim("admin", true)
+				.signWith(SignatureAlgorithm.HS256, key).compact();
 		return compactJws;
 	}
 
 	private LocalDateTime generateTimestamp() {
 		return LocalDateTime.now().plusSeconds(EXPIRATION_TIME);
 	}
-	
+
 	private Date convert(LocalDateTime time) {
 		Date date = new Date();
 		LocalDateTime ldt = LocalDateTime.ofInstant(date.toInstant(), ZoneId.systemDefault());
 		return Date.from(ldt.atZone(ZoneId.systemDefault()).toInstant());
+	}
+	
+	private LocalDateTime convert(Date input) {
+		return input.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
 	}
 }
