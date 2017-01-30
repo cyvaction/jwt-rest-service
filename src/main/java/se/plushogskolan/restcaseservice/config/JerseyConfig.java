@@ -31,5 +31,4 @@ public class JerseyConfig extends ResourceConfig {
 		register(RequestFilter.class);
 		register(ResponseFilter.class);
 	}
-
 }

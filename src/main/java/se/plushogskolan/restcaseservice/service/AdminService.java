@@ -1,6 +1,7 @@
 package se.plushogskolan.restcaseservice.service;
 
-import java.security.Key;
+import static se.plushogskolan.casemanagement.properties.PropertyReader.readProperty;
+
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.security.spec.InvalidKeySpecException;
@@ -23,7 +24,6 @@ import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.SignatureException;
-import io.jsonwebtoken.impl.crypto.MacProvider;
 import se.plushogskolan.restcaseservice.exception.NotFoundException;
 import se.plushogskolan.restcaseservice.exception.UnauthorizedException;
 import se.plushogskolan.restcaseservice.exception.WebInternalErrorException;
@@ -34,8 +34,8 @@ import se.plushogskolan.restcaseservice.repository.AdminRepository;
 @Service
 public class AdminService {
 
-	private Key accessKey = MacProvider.generateKey();
-	private Key refreshKey = MacProvider.generateKey();
+	private String accessKey = readAccessKey();
+	private String refreshKey = readRefreshKey();
 	private final long ACCESS_EXPIRATION_TIME = 20;
 	private final long REFRESH_EXPIRATION_TIME = 60;
 	private final int ITERATIONS = 10000;
@@ -171,5 +171,15 @@ public class AdminService {
 	private Date generateRefreshTimestamp() {
 		return Date.from(LocalDateTime.now().plusSeconds(REFRESH_EXPIRATION_TIME)
 				.minusHours(1).toInstant(ZoneOffset.UTC));
+	}
+	
+	private String readAccessKey() {
+		String key = readProperty("access");
+		return Base64.getEncoder().encodeToString(key.getBytes());
+	}
+	
+	private String readRefreshKey() {
+		String key = readProperty("refresh");
+		return Base64.getEncoder().encodeToString(key.getBytes());
 	}
 }
